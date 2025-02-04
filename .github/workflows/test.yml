@@ -1,0 +1,60 @@
+name: test
+
+on:
+  workflow_dispatch:
+
+  push:
+    branches:
+      - "master"
+
+jobs:
+
+  init-artifacts:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - id: init_artifacts
+        run: |
+          mkdir -p /tmp/artifacts
+          echo "dog is barking" >> /tmp/artifacts/some_file.txt
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: /tmp/artifacts/
+          overwrite: true
+
+  generate-jobs:
+    needs: init-artifacts
+    runs-on: ubuntu-24.04-arm
+    outputs:
+      packages: ${{ steps.generate.outputs.packages }}
+    steps:
+      - id: generate
+        run: |
+          echo "packages=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]" >> "$GITHUB_OUTPUT"
+
+  build-job:
+    needs: generate-jobs
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360 # 6 hour timeout
+    strategy:
+      matrix:
+        job: ${{ fromJson(needs.generate-jobs.outputs.packages) }}
+      max-parallel: 1 # Run jobs serially
+    steps:
+      - name: Load artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: artifacts
+          merge-multiple: true
+          path: /tmp/artifacts/
+      - id: add_artifact
+        run: |
+          touch /tmp/artifacts/${{ matrix.job }}
+          ls /tmp/artifacts
+      - name: Save artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts
+          path: /tmp/artifacts/
+          overwrite: true
